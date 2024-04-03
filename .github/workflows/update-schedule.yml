@@ -1,0 +1,49 @@
+name: Update schedule.yaml
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - update-schedule-yaml
+  # schedule:
+  # - cron: '0 10 * * *'
+jobs:
+  create-pull-request:
+    name: Create PR (if required)
+    # if: github.repository == 'kubernetes/website'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          check-latest: true
+
+      - name: Install schedule-builder
+        run: go install k8s.io/release/cmd/schedule-builder@2373431811d9a174a2a84a73938b5396f0ad0fb0
+
+      - name: Update schedule.yaml
+        run: schedule-builder -u -c data/releases/schedule.yaml
+
+      - name: Check workspace
+        id: create_pr
+        run: |
+          if [[ $(git diff --stat) != '' ]]; then
+            echo "create_pr=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        if: ${{ steps.create_pr.outputs.create_pr == 'true' }}
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: Update schedule.yaml
+          title: Update schedule.yaml
+          body: Update schedule.yaml
+          labels: ok-to-test
+          branch: update-schedule
+          delete-branch: true
+          signoff: true
